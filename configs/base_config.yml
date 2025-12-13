@@ -1,0 +1,37 @@
+# ==============================================================================
+# BASE CONFIGURATION DE REGNET (REGNETX-800MF ou similaire)
+# Cette configuration sert de point de référence pour les expériences.
+# ==============================================================================
+
+MODEL:
+  NAME: RegNetX # Utilisation du X Block (Residual Bottleneck avec Groupes)
+  
+  # --- Paramètres RegNet (Fonction Linéaire Quantifiée) ---
+  # Le cœur du design space (Équations 2, 3, 4)
+  INITIAL_WIDTH: 32   # w0: Largeur du premier bloc du Body (en plus du Stem)
+  SLOPE: 48.0         # wa: Pente de croissance des largeurs (48 est une valeur typique)
+  QUANTIZED_PARAM: 2.5 # wm: Multiplicateur de quantification (2.5 est la valeur trouvée)
+  NETWORK_DEPTH: 20   # d: Profondeur totale du réseau (nombre de XBlocks)
+  
+  # --- Paramètres du X-Block (Communs à tous les stages) ---
+  BOTTLENECK_RATIO: 1 # b: 1 supprime le bottleneck (meilleur pour RegNetX, Figure 11)
+  GROUP_WIDTH: 8      # g: Largeur du groupe pour la Group Conv (8 est standard)
+  # SE_RATIO: 4         # (Non utilisé ici pour RegNetX, serait pour RegNetY)
+
+TRAIN:
+  # --- Configuration de l'entraînement (Standard ImageNet 100 Époques) ---
+  EPOCHS: 100
+  BATCH_SIZE: 128     # Taille du batch par GPU (ou la taille totale pour une seule exécution)
+  LR: 0.1             # Learning Rate initial (pour BATCH_SIZE=128, selon la règle de mise à l'échelle)
+  MOMENTUM: 0.9
+  WEIGHT_DECAY: 0.00005
+  NUM_WORKERS: 8      # Nombre de processus de chargement de données (pour le HPC)
+  WARMUP_EPOCHS: 5    # (Peut être géré dans le Trainer ou ici)
+
+PATHS:
+  # --- Chemins et Sorties ---
+  # REMPLACER PAR VOTRE CHEMIN VERS LE DATASET IMAGENET
+  DATA_ROOT: '/chemin/vers/data/imagenet_dossier_racine' 
+  LOG_DIR: 'logs/regnet_base'
+  MODEL_SAVE_DIR: 'saved_models/'
+  CHECKPOINT_NAME: 'regnetx_base_e100.pth.tar'

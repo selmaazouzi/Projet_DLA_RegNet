@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environnement Virtuel
+venv/
+env_dla/
+.env
+
+# Sorties d'Entraînement et Logs
+logs/
+saved_models/
+data/raw/
+data/processed/
+*.out
+*.err
+*.csv
+
+# IDE/Éditeurs
+.idea/
+.vscode/
+*.swp

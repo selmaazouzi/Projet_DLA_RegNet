@@ -1,0 +1,22 @@
+# ==============================================================================
+# EXPÉRIMENTATION : TEST DU RAPPORT DE BOTTLENECK (B)
+# Cette configuration surcharge la base pour tester b=4 (pratique courante).
+# ==============================================================================
+
+# --- Paramètres RÉSEAU ---
+MODEL:
+  # Réutilisation de la structure de base (w0, wa, wm, d)
+  
+  # Changement de la variable expérimentale
+  BOTTLENECK_RATIO: 4 # b=4: Rappelons que b>1 est la pratique courante (ResNet-50 utilise 4)
+
+# --- Paramètres D'ENTRAÎNEMENT ---
+TRAIN:
+  # On garde les mêmes paramètres que la base pour une comparaison juste.
+  # Les valeurs restent celles du base_config.yml, sauf si surchargées ici.
+  
+# --- Chemins ---
+PATHS:
+  # Changer le nom du checkpoint pour identifier l'expérience
+  LOG_DIR: 'logs/exp_bottleneck_b4'
+  CHECKPOINT_NAME: 'regnetx_b4_exp.pth.tar'
