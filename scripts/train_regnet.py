@@ -36,8 +36,14 @@ def main():
     # --- 2. Configuration du Dispositif (Force CPU pour le test) ---
     # Pour le test local, nous forçons l'utilisation du CPU.
     # EN HPC, CECI DEVIENDRAIT : device = torch.device("cuda:0")
-    device = torch.device("cpu")
-    print(f"ATTENTION : Exécution forcée sur le dispositif : {device}")
+    device_name = cfg.DEVICE.lower()
+    # Si la configuration est 'cuda' ET que le HPC dispose d'une GPU :
+    if device_name == "cuda" and torch.cuda.is_available():
+        device = torch.device("cuda:0") # Utilise la première GPU allouée par Slurm
+    else:
+        device = torch.device(device_name) # Utilise la valeur demandée (cpu ou cuda, en cas d'erreur)
+        
+    print(f"Exécution sur le dispositif : {device}")
     
     # --- 3. Initialisation du Modèle ---
     # Le modèle est créé sur CPU.

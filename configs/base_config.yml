@@ -2,6 +2,7 @@
 # BASE CONFIGURATION DE REGNET (REGNETX-800MF ou similaire)
 # Cette configuration sert de point de référence pour les expériences.
 # ==============================================================================
+DEVICE: "cuda"
 
 MODEL:
   NAME: RegNetX # Utilisation du X Block (Residual Bottleneck avec Groupes)
@@ -31,7 +32,7 @@ TRAIN:
 PATHS:
   # --- Chemins et Sorties ---
   # REMPLACER PAR VOTRE CHEMIN VERS LE DATASET IMAGENET
-  DATA_ROOT: '/chemin/vers/data/imagenet_dossier_racine' 
+  DATA_ROOT: '/gpfslocal/pub/datasets/imagenet/chemin_reel'
   LOG_DIR: 'logs/regnet_base'
   MODEL_SAVE_DIR: 'saved_models/'
   CHECKPOINT_NAME: 'regnetx_base_e100.pth.tar'
