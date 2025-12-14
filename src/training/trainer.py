@@ -5,7 +5,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm import tqdm
 import os
 import shutil # Ajout pour créer des répertoires de sauvegarde si nécessaire
-
+import mlflow
 class Trainer:
     def __init__(self, cfg, model: nn.Module, train_loader, val_loader, device: torch.device):
         self.cfg = cfg 
@@ -135,10 +135,21 @@ class Trainer:
             
             print(f"\n--- Époque {epoch+1}/{self.epochs} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.2f}% ---")
             
+            # --- NOUVEAU : ENREGISTREMENT DES MÉTRIQUES MLFLOW ---
+            try:
+                # L'étape est l'époque (epoch + 1)
+                mlflow.log_metric("train_loss", train_loss, step=epoch + 1)
+                mlflow.log_metric("val_loss", val_loss, step=epoch + 1)
+                mlflow.log_metric("val_acc", val_acc, step=epoch + 1) # val_acc est déjà en pourcentage
+                mlflow.log_metric("current_lr", self.optimizer.param_groups[0]['lr'], step=epoch + 1) # Enregistre le LR actuel
+            except Exception as e:
+                # Ceci est pour la robustesse, au cas où MLflow ne serait pas configuré
+                print(f"Avertissement MLflow : Échec de l'enregistrement des métriques ({e})")
+            # -----------------------------------------------------
+
             # 3. Sauvegarde du meilleur modèle
             if val_acc > self.best_accuracy:
                 self.best_accuracy = val_acc
-                # Ne pas sauvegarder si l'entraînement est marqué comme factice (DUMMY_DATA) 
                 self._save_checkpoint(epoch, self.best_accuracy)
 
     def _save_checkpoint(self, epoch, accuracy):

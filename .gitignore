@@ -22,3 +22,5 @@ data/processed/
 .idea/
 .vscode/
 *.swp
+
+mlflow.db

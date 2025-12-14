@@ -19,7 +19,7 @@ MODEL:
 
 TRAIN:
   # --- Configuration de l'entraînement ---
-  EPOCHS: 5             
+  EPOCHS: 30             
   NUM_CLASSES: 100       # CLASSE CRITIQUE : Mini-ImageNet a 100 classes
   BATCH_SIZE: 64        
   LR: 0.1             
