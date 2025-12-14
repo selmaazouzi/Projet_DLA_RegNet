@@ -1,0 +1,36 @@
+# ==============================================================================
+# CONFIGURATION REGNETX-400MF - TEST INITIAL WIDTH 40 (Plus large)
+# ==============================================================================
+DEVICE: "cuda"
+
+MODEL:
+  NAME: RegNetX-400MF_W40 
+  
+  # --- Paramètres RegNetX-400MF (de base) ---
+  SLOPE: 24.48       
+  QUANTIZED_PARAM: 2.54 
+  NETWORK_DEPTH: 22
+  
+  # --- Paramètres MODIFIÉS ---
+  INITIAL_WIDTH: 40  # <--- MODIFIÉ : Augmentation de la largeur initiale (w0=24 -> w0=40)
+  
+  BOTTLENECK_RATIO: 1
+  GROUP_WIDTH: 16      
+
+TRAIN:
+  # --- Configuration stable (20 Époques) ---
+  EPOCHS: 20             
+  NUM_CLASSES: 100
+  BATCH_SIZE: 64        
+  LR: 0.05             
+  MOMENTUM: 0.9
+  WEIGHT_DECAY: 0.0005 
+  NUM_WORKERS: 8      
+  WARMUP_EPOCHS: 5    
+  SAVE_MODEL: True       
+
+PATHS:
+  DATA_ROOT: 'data/mini_imagenet_structured'
+  LOG_DIR: 'logs/mini_imagenet_x_400mf_w40'
+  MODEL_SAVE_DIR: 'saved_models/'
+  CHECKPOINT_NAME: 'regnetx_400_w40.pth.tar'

@@ -1,6 +1,6 @@
 # Fichier : configs/exp_mini_imagenet_x.yml
 # ==============================================================================
-# CONFIGURATION REGNETX-800MF pour Mini-ImageNet (100 Classes)
+# CONFIGURATION REGNETX-800MF pour Mini-ImageNet (VERSION STABLE / RÉGULARISÉE)
 # ==============================================================================
 DEVICE: "cuda"
 
@@ -18,20 +18,20 @@ MODEL:
   GROUP_WIDTH: 8      
 
 TRAIN:
-  # --- Configuration de l'entraînement ---
-  EPOCHS: 30             
-  NUM_CLASSES: 100       # CLASSE CRITIQUE : Mini-ImageNet a 100 classes
+  # --- Configuration de l'entraînement CORRIGÉE ---
+  EPOCHS: 20             # <--- MODIFIÉ : Réduit de 30 à 20 pour un Early Stopping manuel
+  NUM_CLASSES: 100
   BATCH_SIZE: 64        
-  LR: 0.1             
+  LR: 0.05             # <--- MODIFIÉ : Réduit de 0.1 à 0.05 pour plus de stabilité
   MOMENTUM: 0.9
-  WEIGHT_DECAY: 0.00005
+  WEIGHT_DECAY: 0.0005 # <--- MODIFIÉ : Augmenté de 0.00005 à 0.0005 pour combattre l'Overfitting (Régularisation L2)
   NUM_WORKERS: 8      
   WARMUP_EPOCHS: 5    
   SAVE_MODEL: True       
 
 PATHS:
   # --- Chemins sur Juliet ---
-  DATA_ROOT: 'data/mini_imagenet_structured' # Doit pointer vers le dossier transféré
+  DATA_ROOT: 'data/mini_imagenet_structured'
   LOG_DIR: 'logs/mini_imagenet_x_800mf'
   MODEL_SAVE_DIR: 'saved_models/'
-  CHECKPOINT_NAME: 'regnetx_mini_e30.pth.tar'
+  CHECKPOINT_NAME: 'regnetx_mini_e20_stable.pth.tar' # <--- MODIFIÉ : Nouveau nom de checkpoint

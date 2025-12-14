@@ -1,0 +1,35 @@
+# ==============================================================================
+# CONFIGURATION REGNETX-400MF - TEST BOTTLENECK 2.0 (Plus de capacité)
+# ==============================================================================
+DEVICE: "cuda"
+
+MODEL:
+  NAME: RegNetX-400MF_B2.0 
+  
+  # --- Paramètres RegNetX-400MF (de base) ---
+  INITIAL_WIDTH: 24  
+  SLOPE: 24.48       
+  QUANTIZED_PARAM: 2.54 
+  NETWORK_DEPTH: 22   
+  
+  # --- Paramètres MODIFIÉS ---
+  BOTTLENECK_RATIO: 2  # <--- MODIFIÉ : Double la largeur interne des blocs
+  GROUP_WIDTH: 16      
+
+TRAIN:
+  # --- Configuration stable (20 Époques) ---
+  EPOCHS: 20             
+  NUM_CLASSES: 100
+  BATCH_SIZE: 64        
+  LR: 0.05             
+  MOMENTUM: 0.9
+  WEIGHT_DECAY: 0.0005 
+  NUM_WORKERS: 8      
+  WARMUP_EPOCHS: 5    
+  SAVE_MODEL: True       
+
+PATHS:
+  DATA_ROOT: 'data/mini_imagenet_structured'
+  LOG_DIR: 'logs/mini_imagenet_x_400mf_b2'
+  MODEL_SAVE_DIR: 'saved_models/'
+  CHECKPOINT_NAME: 'regnetx_400_b2.pth.tar'

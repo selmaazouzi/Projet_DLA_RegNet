@@ -1,0 +1,38 @@
+# ==============================================================================
+# CONFIGURATION REGNETY-800MF (avec SE - Version STABLE / RÉGULARISÉE)
+# ==============================================================================
+DEVICE: "cuda"
+
+MODEL:
+  NAME: RegNetY-800MF # <-- CRITIQUE : Nom du modèle avec 'Y'
+  
+  # --- Paramètres RegNet (800MF) ---
+  INITIAL_WIDTH: 32  
+  SLOPE: 48.0        
+  QUANTIZED_PARAM: 2.5 
+  NETWORK_DEPTH: 20   
+  
+  # --- Paramètres du Y-Block (avec SE) ---
+  # Note : Les paramètres architecturaux sont les mêmes que pour le X-800MF,
+  # mais le code du bloc doit changer pour inclure l'opérateur SE.
+  BOTTLENECK_RATIO: 1
+  GROUP_WIDTH: 8
+  # L'intégration du bloc SE est gérée par le code Python si MODEL.NAME contient 'Y'
+
+TRAIN:
+  # --- Configuration de l'entraînement CORRIGÉE pour la stabilité ---
+  EPOCHS: 20             # Réduit pour l'Early Stopping manuel
+  NUM_CLASSES: 100
+  BATCH_SIZE: 64        
+  LR: 0.05             
+  MOMENTUM: 0.9
+  WEIGHT_DECAY: 0.0005 # Régularisation L2 augmentée
+  NUM_WORKERS: 8      
+  WARMUP_EPOCHS: 5    
+  SAVE_MODEL: True       
+
+PATHS:
+  DATA_ROOT: 'data/mini_imagenet_structured'
+  LOG_DIR: 'logs/mini_imagenet_y_800mf' # Nouveau dossier de log
+  MODEL_SAVE_DIR: 'saved_models/'
+  CHECKPOINT_NAME: 'regnety_mini_e20_stable.pth.tar' # Nouveau nom de checkpoint
