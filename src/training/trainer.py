@@ -21,7 +21,7 @@ class Trainer:
         self.epochs = cfg.TRAIN.EPOCHS
         
         # Gestion du Warmup (avec valeur par défaut pour la robustesse)
-        self.WARMUP_EPOCHS = cfg.TRAIN.get('WARMUP_EPOCHS', 5) # Utilisation de .get() pour une valeur par défaut
+        self.WARMUP_EPOCHS = getattr(cfg.TRAIN, 'WARMUP_EPOCHS', 5) # Utilisation de .get() pour une valeur par défaut
         
         # Critère et Optimiseur
         self.criterion = nn.CrossEntropyLoss().to(self.device)
@@ -138,9 +138,8 @@ class Trainer:
             # 3. Sauvegarde du meilleur modèle
             if val_acc > self.best_accuracy:
                 self.best_accuracy = val_acc
-                # Ne pas sauvegarder si l'entraînement est marqué comme factice (DUMMY_DATA)
-                if self.cfg.TRAIN.get('SAVE_MODEL', True): 
-                    self._save_checkpoint(epoch, self.best_accuracy)
+                # Ne pas sauvegarder si l'entraînement est marqué comme factice (DUMMY_DATA) 
+                self._save_checkpoint(epoch, self.best_accuracy)
 
     def _save_checkpoint(self, epoch, accuracy):
         """Sauvegarde les poids du modèle."""

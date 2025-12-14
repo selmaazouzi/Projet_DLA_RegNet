@@ -89,8 +89,8 @@ def main(cfg):
                               weight_decay=cfg.TRAIN.WEIGHT_DECAY)
 
         # 6. Démarrage de l'entraînement
-        trainer = Trainer(model, criterion, optimizer, device, cfg)
-        trainer.train(train_loader, val_loader, cfg.TRAIN.EPOCHS)
+        trainer = Trainer(cfg=cfg, model=model, train_loader=train_loader, val_loader=val_loader, device=device)        
+        trainer.train()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='RegNet/EfficientNet Training')

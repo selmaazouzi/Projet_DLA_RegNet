@@ -39,21 +39,20 @@ def generate_regnet_parameters(d: int, w0: float, wa: float, wm: float) -> Tuple
     profondeurs_stages = []
     
     # Trouver les indices de stage uniques pour itérer (ex: 0, 1, 2, 3)
-    stage_indices = np.unique(s_j_quantized)
-    
-    for stage_index in stage_indices:
+    for stage_index in range(4): # <--- REMPLACEZ VOTRE LOGIQUE PAR CECI
+        
         # Profondeur d_i: nombre de blocs ayant le même indice quantifié
         depth_i = np.sum(s_j_quantized == stage_index)
         
         # Largeur w_i théorique: w_0 * w_m^stage_index
         width_i_raw = w0 * (wm ** stage_index)
         
-        # Arrondir à la puissance de 8 supérieure (contrainte d'efficacité GPU)
-        # La division par 8.0 assure la division flottante
+        # Arrondir à la puissance de 8 supérieure
         width_i = math.ceil(width_i_raw / 8.0) * 8
         
+        # On n'ajoute un stage que s'il y a des blocs qui lui sont assignés
         if depth_i > 0:
-            unique_widths.append(int(width_i)) # Conversion finale en int
+            unique_widths.append(int(width_i))
             profondeurs_stages.append(depth_i)
             
     return unique_widths, profondeurs_stages
