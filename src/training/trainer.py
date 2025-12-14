@@ -3,25 +3,27 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm import tqdm
-# Importer les outils de configuration (supposons un objet 'cfg' chargé du YAML)
+import os
+import shutil # Ajout pour créer des répertoires de sauvegarde si nécessaire
 
 class Trainer:
     def __init__(self, cfg, model: nn.Module, train_loader, val_loader, device: torch.device):
-        # Configuration (du fichier YAML)
         self.cfg = cfg 
         self.model = model
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.device= device
+        self.device = device
         
-        # Hyperparamètres
-        self.lr_base = cfg.TRAIN.LR  # e.g., 0.1
-        self.wd = cfg.TRAIN.WEIGHT_DECAY # e.g., 5e-5
-        self.momentum = cfg.TRAIN.MOMENTUM # e.g., 0.9
-        self.epochs = cfg.TRAIN.EPOCHS # e.g., 100
+        # Hyperparamètres (assurez-vous que ces clés existent dans votre YAML)
+        self.lr_base = cfg.TRAIN.LR 
+        self.wd = cfg.TRAIN.WEIGHT_DECAY
+        self.momentum = cfg.TRAIN.MOMENTUM
+        self.epochs = cfg.TRAIN.EPOCHS
+        
+        # Gestion du Warmup (avec valeur par défaut pour la robustesse)
+        self.WARMUP_EPOCHS = cfg.TRAIN.get('WARMUP_EPOCHS', 5) # Utilisation de .get() pour une valeur par défaut
         
         # Critère et Optimiseur
-        # --- CORRECTION CRITIQUE : Utiliser .to(self.device) au lieu de .cuda() ---
         self.criterion = nn.CrossEntropyLoss().to(self.device)
         self.optimizer = optim.SGD(
             self.model.parameters(),
@@ -30,49 +32,49 @@ class Trainer:
             weight_decay=self.wd
         )
         
-        # Scheduler de Learning Rate (Logique Cruciale)
+        # Scheduler de Learning Rate 
         self.scheduler = self._configure_scheduler()
-        
-        # Nombre de batchs/itération par époque
         self.steps_per_epoch = len(train_loader)
+        
+        # Initialisation de la meilleure précision pour le suivi
+        self.best_accuracy = 0.0
 
     def _configure_scheduler(self):
-        # Selon l'article, on utilise un schedule en demi-période cosinusoïdale.
-        T_max_epochs = self.epochs
-        
+        # T_max est le nombre total d'époques pour la descente cosinusoïdale.
         scheduler = CosineAnnealingLR(
             self.optimizer, 
-            T_max=T_max_epochs, 
-            eta_min=0.0  # Taux d'apprentissage minimal
+            T_max=self.epochs - self.WARMUP_EPOCHS, # Le schedular ne commence qu'après le Warmup
+            eta_min=0.0 
         )
-        
         return scheduler
 
     def train_epoch(self, epoch):
         self.model.train()
         
-        # Ajout de la barre de progression
-        pbar = tqdm(self.train_loader, desc=f"Train E{epoch+1}/{self.epochs}", dynamic_ncols=True)
-        
-        WARMUP_EPOCHS = self.cfg.TRAIN.WARMUP_EPOCHS if 'WARMUP_EPOCHS' in self.cfg.TRAIN else 5
-        warmup_steps = WARMUP_EPOCHS * self.steps_per_epoch
+        # Calcul du pas global et du nombre total de pas de warmup
+        global_step_start = epoch * self.steps_per_epoch
+        warmup_steps_total = self.WARMUP_EPOCHS * self.steps_per_epoch
         
         running_loss = 0.0
         
+        pbar = tqdm(self.train_loader, desc=f"Train E{epoch+1}/{self.epochs}", dynamic_ncols=True)
+        
         for i, (images, targets) in enumerate(pbar):
-            global_step = epoch * self.steps_per_epoch + i
+            global_step = global_step_start + i
             
-            # 1. Ajustement du Learning Rate (Warmup et Cosine)
-            if epoch < WARMUP_EPOCHS:
-                new_lr = self.lr_base * (global_step / warmup_steps)
-            else:
-                new_lr = self.optimizer.param_groups[0]['lr']
+            # 1. Gestion du Learning Rate (Warmup vs Cosine Annealing)
+            current_lr = self.optimizer.param_groups[0]['lr'] # LR de base ou LR du scheduler précédent
             
+            if epoch < self.WARMUP_EPOCHS:
+                # Calcul progressif du LR pendant le Warmup
+                new_lr = self.lr_base * (global_step / warmup_steps_total)
+                current_lr = new_lr # Met à jour le LR affiché
+            
+            # Mise à jour du LR de l'optimiseur
             for param_group in self.optimizer.param_groups:
-                param_group['lr'] = new_lr
+                param_group['lr'] = current_lr
 
             # 2. Entraînement standard
-            # Les données sont déplacées vers le bon dispositif (self.device)
             images, targets = images.to(self.device), targets.to(self.device)
             self.optimizer.zero_grad()
             outputs = self.model(images)
@@ -83,10 +85,11 @@ class Trainer:
             running_loss += loss.item()
             
             # Mise à jour de la barre de progression
-            pbar.set_postfix({'Loss': f'{running_loss / (i+1):.4f}', 'LR': f'{new_lr:.6f}'})
+            pbar.set_postfix({'Loss': f'{running_loss / (i+1):.4f}', 'LR': f'{current_lr:.6f}'})
 
-        # 3. Step du Cosine Annealing (si le Warmup est terminé)
-        if epoch >= WARMUP_EPOCHS:
+        # 3. Step du Cosine Annealing (uniquement après le Warmup)
+        if epoch >= self.WARMUP_EPOCHS:
+            # Note: Le scheduler est 'stepé' une fois par époque.
             self.scheduler.step()
             
         return running_loss / self.steps_per_epoch
@@ -103,7 +106,6 @@ class Trainer:
         
         with torch.no_grad():
             for images, targets in tqdm(self.val_loader, desc="Validate", dynamic_ncols=True):
-                # Les données sont déplacées vers le bon dispositif (self.device)
                 images, targets = images.to(self.device), targets.to(self.device)
                 outputs = self.model(images)
                 loss = self.criterion(outputs, targets)
@@ -124,8 +126,6 @@ class Trainer:
         """
         Gère la boucle complète d'entraînement et de validation sur toutes les époques.
         """
-        best_accuracy = 0.0
-        
         for epoch in range(self.epochs):
             # 1. Entraînement
             train_loss = self.train_epoch(epoch)
@@ -136,20 +136,28 @@ class Trainer:
             print(f"\n--- Époque {epoch+1}/{self.epochs} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.2f}% ---")
             
             # 3. Sauvegarde du meilleur modèle
-            if val_acc > best_accuracy:
-                best_accuracy = val_acc
-                self._save_checkpoint(epoch, best_accuracy)
+            if val_acc > self.best_accuracy:
+                self.best_accuracy = val_acc
+                # Ne pas sauvegarder si l'entraînement est marqué comme factice (DUMMY_DATA)
+                if self.cfg.TRAIN.get('SAVE_MODEL', True): 
+                    self._save_checkpoint(epoch, self.best_accuracy)
 
     def _save_checkpoint(self, epoch, accuracy):
         """Sauvegarde les poids du modèle."""
+        
+        # S'assurer que le répertoire de sauvegarde existe
+        save_dir = self.cfg.PATHS.MODEL_SAVE_DIR
+        os.makedirs(save_dir, exist_ok=True)
+
         checkpoint = {
             'epoch': epoch + 1,
             'state_dict': self.model.state_dict(),
             'best_accuracy': accuracy,
             'optimizer': self.optimizer.state_dict(),
             'scheduler': self.scheduler.state_dict(),
+            'config': self.cfg # Sauvegarde de la configuration utilisée
         }
         
-        save_path = f"{self.cfg.PATHS.MODEL_SAVE_DIR}/{self.cfg.PATHS.CHECKPOINT_NAME}"
+        save_path = f"{save_dir}/{self.cfg.PATHS.CHECKPOINT_NAME}"
         torch.save(checkpoint, save_path)
         print(f"Sauvegarde du meilleur modèle (Acc: {accuracy:.2f}%) vers {save_path}")

@@ -1,0 +1,37 @@
+# Fichier : configs/exp_mini_imagenet_x.yml
+# ==============================================================================
+# CONFIGURATION REGNETX-800MF pour Mini-ImageNet (100 Classes)
+# ==============================================================================
+DEVICE: "cuda"
+
+MODEL:
+  NAME: RegNetX-800MF 
+  
+  # --- Paramètres RegNet (800MF) ---
+  INITIAL_WIDTH: 32  
+  SLOPE: 48.0        
+  QUANTIZED_PARAM: 2.5 
+  NETWORK_DEPTH: 20   
+  
+  # --- Paramètres du X-Block ---
+  BOTTLENECK_RATIO: 1
+  GROUP_WIDTH: 8      
+
+TRAIN:
+  # --- Configuration de l'entraînement ---
+  EPOCHS: 5             
+  NUM_CLASSES: 100       # CLASSE CRITIQUE : Mini-ImageNet a 100 classes
+  BATCH_SIZE: 64        
+  LR: 0.1             
+  MOMENTUM: 0.9
+  WEIGHT_DECAY: 0.00005
+  NUM_WORKERS: 8      
+  WARMUP_EPOCHS: 5    
+  SAVE_MODEL: True       
+
+PATHS:
+  # --- Chemins sur Juliet ---
+  DATA_ROOT: 'data/mini_imagenet_structured' # Doit pointer vers le dossier transféré
+  LOG_DIR: 'logs/mini_imagenet_x_800mf'
+  MODEL_SAVE_DIR: 'saved_models/'
+  CHECKPOINT_NAME: 'regnetx_mini_e30.pth.tar'

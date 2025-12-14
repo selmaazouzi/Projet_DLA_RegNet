@@ -1,99 +1,105 @@
-import argparse
-import yaml
-from easydict import EasyDict as edict
 import torch
+import torch.nn as nn
+import torch.optim as optim
+import yaml
+import argparse
+import mlflow 
 
-# Importation des composants que nous avons définis
-from src.models.regnet import RegNet
-from src.training.trainer import Trainer
-from src.training.dataset import get_data_loaders # <-- Importation du VRAI Data Loader
+# Import de vos modules
+from src.models import RegNet, create_efficientnet # <-- Utilise le créateur EfficientNet
+from src.training import Trainer, get_data_loaders
+# from src.blocks import Stem, Head # Non nécessaire ici
 
-# La fonction setup_data_loaders (factice) est maintenant remplacée par get_data_loaders.
-# Nous allons la renommer ici pour éviter les erreurs d'appel si elle existe encore.
+# --- Configuration du Log (doit correspondre à votre main.py) ---
+class Config:
+    """ Permet d'accéder aux paramètres du YAML via point (cfg.TRAIN.EPOCHS). """
+    def __init__(self, data):
+        for k, v in data.items():
+            if isinstance(v, dict):
+                setattr(self, k, Config(v))
+            else:
+                setattr(self, k, v)
 
-def load_config(config_path):
-    """Charge et parse le fichier de configuration YAML."""
-    with open(config_path, 'r') as f:
-        cfg = yaml.safe_load(f)
-    return edict(cfg)
-
-def main():
-    """Point d'entrée principal du programme d'entraînement."""
+# --- FONCTION DE SETUP MLFLOW ---
+def setup_mlflow(cfg):
+    """ Configure l'expérience MLflow et enregistre les hyper-paramètres. """
     
-    parser = argparse.ArgumentParser(description='Entraînement des modèles RegNet.')
-    parser.add_argument(
-        '--config',
-        type=str,
-        required=True,
-        help='Chemin vers le fichier de configuration YAML (e.g., configs/base_config.yml)'
-    )
-    args = parser.parse_args()
+    # Définir le nom de l'expérience
+    experiment_name = f"Classification_{cfg.MODEL.NAME}"
+    mlflow.set_experiment(experiment_name)
     
-    # --- 1. Chargement de la Configuration ---
-    cfg = load_config(args.config)
-    print(f"Configuration chargée à partir de : {args.config}")
+    # Enregistrer les hyper-paramètres
+    print(f"Démarrage de l'expérience MLflow : {experiment_name}")
     
-    # --- 2. Configuration du Dispositif (Force CPU pour le test) ---
-    # Pour le test local, nous forçons l'utilisation du CPU.
-    # EN HPC, CECI DEVIENDRAIT : device = torch.device("cuda:0")
-    device_name = cfg.DEVICE.lower()
-    # Si la configuration est 'cuda' ET que le HPC dispose d'une GPU :
-    if device_name == "cuda" and torch.cuda.is_available():
-        device = torch.device("cuda:0") # Utilise la première GPU allouée par Slurm
+    # Log les paramètres du modèle
+    for key, value in vars(cfg.MODEL).items():
+        mlflow.log_param(f"model.{key}", value)
+    
+    # Log les paramètres d'entraînement
+    for key, value in vars(cfg.TRAIN).items():
+        mlflow.log_param(f"train.{key}", value)
+
+def main(cfg):
+    
+    # Définition du nom du Run MLflow plus adapté à RegNet ou EfficientNet
+    if 'REGNET' in cfg.MODEL.NAME.upper():
+        run_name = f"{cfg.MODEL.NAME}_D{cfg.MODEL.NETWORK_DEPTH}_LR{cfg.TRAIN.LR}"
+    elif 'EFFICIENTNET' in cfg.MODEL.NAME.upper():
+        run_name = f"{cfg.MODEL.NAME}_{cfg.MODEL.VARIANT}_LR{cfg.TRAIN.LR}"
     else:
-        device = torch.device(device_name) # Utilise la valeur demandée (cpu ou cuda, en cas d'erreur)
+        run_name = f"{cfg.MODEL.NAME}_LR{cfg.TRAIN.LR}"
+    
+    with mlflow.start_run(run_name=run_name):
         
-    print(f"Exécution sur le dispositif : {device}")
-    
-    # --- 3. Initialisation du Modèle ---
-    # Le modèle est créé sur CPU.
-    model = RegNet(cfg)
-    model = model.to(device)
-    # Dans un test réel, il faut s'assurer que RegNet(cfg) n'appelle pas .cuda()
-    print(f"Modèle RegNet ({cfg.MODEL.NAME}) initialisé.")
-    
-    # --- 4. Configuration des DataLoaders ---
-    # Pour le test CPU, vous aurez besoin de données ImageNet (même si c'est lent).
-    # Si les données ne sont pas présentes, utilisez la version 'factice' ci-dessous
-    # ou assurez-vous que cfg.PATHS.DATA_ROOT est correct.
-    try:
+        # 1. Enregistrement des paramètres MLflow
+        setup_mlflow(cfg)
+
+        # 2. Définition du périphérique (DEVICE)
+        device = torch.device(cfg.DEVICE if torch.cuda.is_available() else "cpu")
+        print(f"Utilisation du périphérique : {device}")
+
+        # 3. Chargement des données
         train_loader, val_loader = get_data_loaders(cfg)
-    except FileNotFoundError:
-        print("Erreur : Données ImageNet non trouvées ou chemin incorrect. Utilisation des DataLoaders factices.")
+
+        # --- 4. Initialisation du modèle (LOGIQUE DE SÉLECTION) ---
+        if 'REGNET' in cfg.MODEL.NAME.upper():
+            # Utilise l'assembleur RegNet
+            model = RegNet(cfg)
+        elif 'EFFICIENTNET' in cfg.MODEL.NAME.upper():
+            # Utilise l'assembleur EfficientNet
+            model = create_efficientnet(cfg)
+        else:
+             raise ValueError(f"Nom de modèle non reconnu: {cfg.MODEL.NAME}. Doit contenir 'RegNet' ou 'EfficientNet'.")
+             
+        model = model.to(device)
         
-        # --- Utilisation des DataLoaders factices pour continuer le test ---
-        batch_size = cfg.TRAIN.BATCH_SIZE
-        image_size = 224
+        # --- SUPPORT MULTI-GPU (DataParallel) ---
+        if torch.cuda.device_count() > 1:
+            print(f"Utilisation de {torch.cuda.device_count()} GPUs via DataParallel.")
+            model = torch.nn.DataParallel(model) 
+        # ----------------------------------------
         
-        dummy_input = torch.randn(batch_size, 3, image_size, image_size)
-        dummy_target = torch.randint(0, 1000, (batch_size,))
-        dummy_dataset = torch.utils.data.TensorDataset(dummy_input, dummy_target)
-        
-        train_loader = torch.utils.data.DataLoader(dummy_dataset, batch_size=batch_size, shuffle=True, num_workers=0) # num_workers=0 sur CPU
-        val_loader = torch.utils.data.DataLoader(dummy_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
-        # -------------------------------------------------------------------
-        
-    # --- 5. Initialisation du Trainer ---
-    # Pour le test, nous allons surcharger l'époque pour qu'il s'exécute rapidement.
-    cfg.TRAIN.EPOCHS = 3 # Réduit à 3 époques pour la validation rapide
-    
-    trainer = Trainer(
-        cfg=cfg,
-        model=model,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        device=device # <-- PASSAGE DU DISPOSITIF (essentiel pour CPU)
-    )
-    
-    # --- 6. Démarrage de l'entraînement (Boucle d'entraînement complète) ---
-    print("\n--- Démarrage de la simulation d'entraînement (3 époques) ---")
-    
-    # Nous appelons la méthode train() complète qui gère les époques, validate(), et save_checkpoint().
-    trainer.train() 
-        
-    print("--- Simulation d'entraînement terminée ---")
-    
+        print(f"Modèle {cfg.MODEL.NAME} initialisé.")
+
+        # 5. Définition de la Loss et de l'Optimiseur
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.SGD(model.parameters(), 
+                              lr=cfg.TRAIN.LR, 
+                              momentum=cfg.TRAIN.MOMENTUM, 
+                              weight_decay=cfg.TRAIN.WEIGHT_DECAY)
+
+        # 6. Démarrage de l'entraînement
+        trainer = Trainer(model, criterion, optimizer, device, cfg)
+        trainer.train(train_loader, val_loader, cfg.TRAIN.EPOCHS)
+
 if __name__ == '__main__':
-    # La fonction main nécessite que get_data_loaders soit définie.
-    # Si vous n'avez pas encore implémenté src/training/dataset.py, le test utilisera les DataLoaders factices.
-    main()
+    parser = argparse.ArgumentParser(description='RegNet/EfficientNet Training')
+    parser.add_argument('--config', type=str, required=True, help='Path to YAML config file')
+    args = parser.parse_args()
+
+    # Lecture du fichier YAML
+    with open(args.config, 'r') as f:
+        config_data = yaml.safe_load(f)
+        
+    # Lancement de l'exécution avec l'objet Config
+    main(Config(config_data))

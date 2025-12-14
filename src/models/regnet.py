@@ -2,7 +2,8 @@ import numpy as np
 import math
 from typing import List, Tuple
 import torch.nn as nn
-# Importation des blocs validés depuis le package 'blocks'
+# Importation des blocs validés (assurez-vous que Stem, Head, Stage existent et sont corrects)
+# Assurez-vous que Stage est compatible RegNetX/RegNetY
 from src.blocks import Stem, Head, Stage 
 
 
@@ -47,12 +48,12 @@ def generate_regnet_parameters(d: int, w0: float, wa: float, wm: float) -> Tuple
         # Largeur w_i théorique: w_0 * w_m^stage_index
         width_i_raw = w0 * (wm ** stage_index)
         
-        # [cite_start]Rendre la largeur divisible par 8 (contrainte d'efficacité GPU, [cite: 208])
-        # math.ceil(x / 8.0) * 8 est la manière standard d'arrondir à la puissance de 8 supérieure.
+        # Arrondir à la puissance de 8 supérieure (contrainte d'efficacité GPU)
+        # La division par 8.0 assure la division flottante
         width_i = math.ceil(width_i_raw / 8.0) * 8
         
         if depth_i > 0:
-            unique_widths.append(width_i)
+            unique_widths.append(int(width_i)) # Conversion finale en int
             profondeurs_stages.append(depth_i)
             
     return unique_widths, profondeurs_stages
@@ -66,20 +67,25 @@ class RegNet(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         
-        # Extraction des 6 paramètres structurels du design space
+        # --- Récupération des paramètres structurels ---
         d = cfg.MODEL.NETWORK_DEPTH
         w0 = cfg.MODEL.INITIAL_WIDTH
         wa = cfg.MODEL.SLOPE
         wm = cfg.MODEL.QUANTIZED_PARAM
         b = cfg.MODEL.BOTTLENECK_RATIO
         g = cfg.MODEL.GROUP_WIDTH
+        num_classes = cfg.TRAIN.NUM_CLASSES # ESSENTIEL : Utiliser le nombre de classes du YAML
+        
+        # --- Gestion de RegNetX vs RegNetY ---
+        # Si le nom du modèle contient 'Y', nous supposons qu'il utilise le Squeeze-and-Excitation (SE)
+        is_regnet_y = 'Y' in cfg.MODEL.NAME.upper()
         
         # 1. Calculer la structure (largeurs et profondeurs par stage)
         largeurs_stages, profondeurs_stages = generate_regnet_parameters(d, w0, wa, wm)
         
         # --- Construction ---
         
-        # [cite_start]1. Stem (Tige) - Fixé à 32 canaux [cite: 179]
+        # 1. Stem (Tige) - Largeur fixée à 32 canaux 
         STEM_WIDTH = 32 
         self.stem = Stem(in_channels=3, out_channels=STEM_WIDTH)
         current_in_width = STEM_WIDTH
@@ -91,9 +97,7 @@ class RegNet(nn.Module):
             stage_depth = profondeurs_stages[i]
             stage_width = largeurs_stages[i]
             
-            # Logique de Stride : Le Stem est stride=2. 
-            # Stage 1 (i=0) est stride=1 (conserve la résolution),
-            # Stages 2, 3, 4 (i>0) commencent par stride=2 (réduisent la résolution).
+            # Logique de Stride : Stage 1 (i=0) est stride=1, Stages suivants (i>0) sont stride=2.
             stride_first_block = 1 if i == 0 else 2
 
             stage_module = Stage(
@@ -102,17 +106,18 @@ class RegNet(nn.Module):
                 depth=stage_depth, 
                 bottleneck_ratio=b, 
                 group_width=g,
-                stride_first_block=stride_first_block 
+                stride_first_block=stride_first_block,
+                use_se=is_regnet_y # Passage du paramètre RegNetY
             )
             
             self.body.add_module(f'stage{i+1}', stage_module)
             current_in_width = stage_width
         
         # 3. Head (Tête)
-        self.head = Head(in_channels=current_in_width, num_classes=1000)
+        self.head = Head(in_channels=current_in_width, num_classes=num_classes) # NUM_CLASSES variable
 
         # Print pour vérification (utile lors de l'exécution du script de lancement)
-        print(f"Structure RegNet Générée avec {len(largeurs_stages)} Stages:")
+        print(f"Structure RegNet {'Y' if is_regnet_y else 'X'} Générée avec {len(largeurs_stages)} Stages:")
         for i in range(len(largeurs_stages)):
              print(f"Stage {i+1}: Largeur={largeurs_stages[i]}, Profondeur={profondeurs_stages[i]}")
 
